@@ -146,7 +146,7 @@ do {
             if case .event(let client, let name, let time, let input) = message {
                 print(String(format: "%.3f", Double(time) / 1e9), "client \(client) \(name):", input)
             } else if case .state(let state) = message {
-                print("state: hinge \(state.hinge.map { String(format: "%.1f", $0) } ?? "unknown"), held \(state.held)")
+                print("state: hinge \(state.hinge.map { String(format: "%.1f", $0) } ?? "unknown"), held \(state.held), lit \(state.lit.map { "\($0)" } ?? "unknown")")
             }
         }
         print("watching as client \(host.id)")

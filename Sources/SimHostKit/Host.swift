@@ -28,6 +28,7 @@ public final class Host: @unchecked Sendable {
     private var setAngle: Double?
     /// Once the helper reports the hinge, only its reports change the state's angle.
     private var hingeReadBack = false
+    private var springBoard: SpringBoard?
     private var signals: [DispatchSourceSignal] = []
     private var idleSince = Date()
 
@@ -35,7 +36,10 @@ public final class Host: @unchecked Sendable {
         guard simulator.isBooted else { throw SimHostError("\(simulator.name) is not booted") }
         self.simulator = simulator
         touchscreen = try Touchscreen(simulator: simulator)
-        state = Wire.State(hinge: nil, held: .portrait)
+        state = Wire.State(hinge: nil, held: .portrait, lit: simulator.isDuo ? nil : .main)
+        if simulator.isDuo {
+            springBoard = SpringBoard(udid: simulator.udid, queue: queue) { [weak self] lit in self?.change { $0.lit = lit } }
+        }
         // The helper takes most of a second to start. Touches do not wait for it.
         guestQueue.async { [self] in
             do {
@@ -71,6 +75,7 @@ public final class Host: @unchecked Sendable {
     private func finish() -> Never {
         unlink(Self.socketPath(udid: simulator.udid))
         guest?.stop()
+        springBoard?.stop()
         exit(0)
     }
 

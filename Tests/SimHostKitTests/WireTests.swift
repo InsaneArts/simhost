@@ -14,8 +14,8 @@ struct WireTests {
         .input(.orientation(.landscapeRight)),
         .input(.button(page: 0x0C, usage: 0xE9, down: false)),
         .event(client: 3, name: "agent", time: 123_456_789, input: .touch(.up, x: 0.5, y: 0.5, screen: .main, edge: 0)),
-        .state(Wire.State(hinge: 92.6, held: .upsideDown)),
-        .state(Wire.State(hinge: nil, held: .portrait)),
+        .state(Wire.State(hinge: 92.6, held: .upsideDown, lit: .duoInner)),
+        .state(Wire.State(hinge: nil, held: .portrait, lit: nil)),
     ]
 
     @Test(arguments: messages) func roundTrip(_ message: Wire.Message) {

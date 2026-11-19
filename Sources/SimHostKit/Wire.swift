@@ -24,10 +24,13 @@ public enum Wire {
         public var hinge: Double?
         /// How the device is held, as a client last set it.
         public var held: Orientation
+        /// The panel that shows the interface. Nil until SpringBoard tells it.
+        public var lit: Screen?
 
-        public init(hinge: Double?, held: Orientation) {
+        public init(hinge: Double?, held: Orientation, lit: Screen?) {
             self.hinge = hinge
             self.held = held
+            self.lit = lit
         }
     }
 
@@ -75,7 +78,7 @@ public enum Wire {
         case .event(let client, let name, let time, let input):
             kind = 0x20; body.u32(client); body.u64(time); body.string(name); body.input(input)
         case .state(let state):
-            kind = 0x30; body.f64(state.hinge ?? .nan); body.u8(state.held.rawValue)
+            kind = 0x30; body.f64(state.hinge ?? .nan); body.u8(state.held.rawValue); body.u8(state.lit?.rawValue ?? 0xFF)
         }
         var data = Data()
         var length = UInt32(body.data.count + 1).littleEndian
@@ -116,8 +119,8 @@ public enum Wire {
             guard let client = body.u32(), let time = body.u64(), let name = body.string(), let input = body.input() else { return nil }
             return .event(client: client, name: name, time: time, input: input)
         case 0x30:
-            guard let hinge = body.f64(), let held = body.u8().flatMap(Orientation.init) else { return nil }
-            return .state(State(hinge: hinge.isNaN ? nil : hinge, held: held))
+            guard let hinge = body.f64(), let held = body.u8().flatMap(Orientation.init), let lit = body.u8() else { return nil }
+            return .state(State(hinge: hinge.isNaN ? nil : hinge, held: held, lit: Screen(rawValue: lit)))
         default: return nil
         }
     }
