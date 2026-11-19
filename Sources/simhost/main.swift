@@ -42,7 +42,7 @@ final class Watch: @unchecked Sendable {
 }
 
 /// Times a touch to the first frame that shows it, against the probe app, like serve-sim-bench.
-func bench(udid: String, rounds: Int) throws {
+func bench(udid: String, rounds: Int, throughHost: Bool) throws {
     let point = CGPoint(x: 0.5, y: 0.35)
     let started = now()
     let simulator = try Simulator(udid: udid)
@@ -52,7 +52,14 @@ func bench(udid: String, rounds: Int) throws {
         guard frame.panel == panel else { return }
         watch.note(level(frame.surface, at: point), time: Double(frame.time) / 1e9)
     }
-    let touchscreen = try Touchscreen(simulator: simulator)
+    let send: (Wire.Phase) -> Void
+    if throughHost {
+        let client = try HostClient(udid: udid, name: "bench", launch: launch(udid))
+        send = { client.send(.touch($0, x: Float(point.x), y: Float(point.y), screen: Wire.Screen(panel), edge: 0)) }
+    } else {
+        let touchscreen = try Touchscreen(simulator: simulator)
+        send = { touchscreen.touch($0 == .up ? .up : .down, at: point, on: panel) }
+    }
     print(String(format: "attached and first frame after %.1f ms", (watch.firstFrame - started) * 1000))
 
 
@@ -60,11 +67,11 @@ func bench(udid: String, rounds: Int) throws {
     Thread.sleep(forTimeInterval: 0.3)
     for _ in 0..<rounds {
         let start = now()
-        touchscreen.touch(.down, at: point, on: panel)
+        send(.down)
         if let seen = watch.waitFor(white: true, after: start) { down.append(seen - start) }
         Thread.sleep(forTimeInterval: 0.05 + Double.random(in: 0...0.1))
         let release = now()
-        touchscreen.touch(.up, at: point, on: panel)
+        send(.up)
         if let seen = watch.waitFor(white: false, after: release) { up.append(seen - release) }
         Thread.sleep(forTimeInterval: 0.1 + Double.random(in: 0...0.15))
     }
@@ -82,13 +89,63 @@ func bench(udid: String, rounds: Int) throws {
     print("frames seen: \(watch.frames)")
 }
 
+/// The command line that starts this simulator's host: this program with `serve`.
+func launch(_ udid: String) -> [String] {
+    [Bundle.main.executablePath ?? CommandLine.arguments[0], "serve", udid]
+}
+
+let usage = """
+usage: simhost serve <udid>                   run the host for a simulator
+       simhost tap <udid> <x> <y> [cover|inner]   tap at a point from 0 to 1
+       simhost type <udid> <text>             type text
+       simhost key <udid> <usage>             press a key by HID usage, such as 40 for return
+       simhost fold <udid> <degrees> [ms]     set iPhone Duo's hinge
+       simhost watch <udid>                   print what every client does
+       simhost bench <udid> [rounds] [--host] time a touch to the frame that shows it
+"""
+
+setvbuf(stdout, nil, _IOLBF, 0)
 let arguments = Array(CommandLine.arguments.dropFirst())
 do {
-    switch arguments.first {
-    case "bench" where arguments.count >= 2:
-        try bench(udid: arguments[1], rounds: arguments.count > 2 ? Int(arguments[2]) ?? 40 : 40)
+    guard arguments.count >= 2 else { print(usage); exit(2) }
+    let udid = arguments[1]
+    func client(_ onMessage: @escaping @Sendable (Wire.Message) -> Void = { _ in }) throws -> HostClient {
+        try HostClient(udid: udid, name: "simhost", launch: launch(udid), onMessage: onMessage)
+    }
+    switch arguments[0] {
+    case "serve":
+        try Host(simulator: Simulator(udid: udid)).run()
+    case "tap" where arguments.count >= 4:
+        let screen: Wire.Screen = arguments.count > 4 ? (arguments[4] == "inner" ? .duoInner : .duoCover)
+            : (try Simulator(udid: udid).isDuo ? .duoCover : .main)
+        let x = Float(arguments[2]) ?? 0.5, y = Float(arguments[3]) ?? 0.5
+        let host = try client()
+        host.send(.touch(.down, x: x, y: y, screen: screen, edge: 0))
+        usleep(50_000)
+        host.send(.touch(.up, x: x, y: y, screen: screen, edge: 0))
+    case "type" where arguments.count >= 3:
+        try client().send(.type(arguments[2...].joined(separator: " ")))
+    case "key" where arguments.count >= 3:
+        let host = try client()
+        let usage = UInt32(arguments[2]) ?? 40
+        host.send(.key(usage: usage, down: true))
+        host.send(.key(usage: usage, down: false))
+    case "fold" where arguments.count >= 3:
+        try client().send(.fold(degrees: Double(arguments[2]) ?? 0, milliseconds: arguments.count > 3 ? Double(arguments[3]) ?? 0 : 0))
+    case "watch":
+        let host = try client { message in
+            if case .event(let client, let name, let time, let input) = message {
+                print(String(format: "%.3f", Double(time) / 1e9), "client \(client) \(name):", input)
+            } else if case .state(let state) = message {
+                print("state: hinge \(state.hinge.map { String(format: "%.1f", $0) } ?? "unknown"), held \(state.held)")
+            }
+        }
+        print("watching as client \(host.id)")
+        withExtendedLifetime(host) { dispatchMain() }
+    case "bench":
+        try bench(udid: udid, rounds: arguments.dropFirst(2).compactMap { Int($0) }.first ?? 40, throughHost: arguments.contains("--host"))
     default:
-        print("usage: simhost bench <udid> [rounds]")
+        print(usage)
         exit(2)
     }
 } catch {
