@@ -13,9 +13,12 @@ public final class Guest: @unchecked Sendable {
     private let lock = NSLock()
     private var waiting: [(Bool) -> Void] = []
     private var pending = Data()
+    private let onHinge: @Sendable (Double) -> Void
 
-    /// Starts the helper and waits until its devices are ready.
-    public init(simulator: Simulator) throws(SimHostError) {
+    /// Starts the helper and waits until its devices are ready. On iPhone Duo, `onHinge` gets
+    /// the hinge angle soon after, and again whenever it changes. It runs on a queue of its own.
+    public init(simulator: Simulator, onHinge: @escaping @Sendable (Double) -> Void = { _ in }) throws(SimHostError) {
+        self.onHinge = onHinge
         let helper = try Self.build()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/xcrun")
         process.arguments = ["simctl", "spawn", simulator.udid, helper.path]
@@ -104,14 +107,20 @@ public final class Guest: @unchecked Sendable {
 
     private func read(_ data: Data) {
         var answers: [((Bool) -> Void, Bool)] = []
+        var hinges: [Double] = []
         lock.withLock {
             pending.append(data)
             while let end = pending.firstIndex(of: UInt8(ascii: "\n")) {
                 let line = String(decoding: pending[pending.startIndex..<end], as: UTF8.self)
                 pending.removeSubrange(pending.startIndex...end)
-                if !waiting.isEmpty { answers.append((waiting.removeFirst(), line == "OK")) }
+                if line.hasPrefix("hinge ") {
+                    if let degrees = Double(line.dropFirst(6)) { hinges.append(degrees) }
+                } else if !waiting.isEmpty {
+                    answers.append((waiting.removeFirst(), line == "OK"))
+                }
             }
         }
+        for degrees in hinges { onHinge(degrees) }
         for (done, ok) in answers { done(ok) }
     }
 

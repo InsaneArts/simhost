@@ -26,6 +26,8 @@ public final class Host: @unchecked Sendable {
     private var state: Wire.State
     /// The angle the host last set the hinge to.
     private var setAngle: Double?
+    /// Once the helper reports the hinge, only its reports change the state's angle.
+    private var hingeReadBack = false
     private var signals: [DispatchSourceSignal] = []
     private var idleSince = Date()
 
@@ -37,7 +39,7 @@ public final class Host: @unchecked Sendable {
         // The helper takes most of a second to start. Touches do not wait for it.
         guestQueue.async { [self] in
             do {
-                let guest = try Guest(simulator: simulator)
+                let guest = try Guest(simulator: simulator) { [weak self] degrees in self?.queue.async { self?.heardHinge(degrees) } }
                 queue.sync { self.guest = guest }
             } catch {
                 FileHandle.standardError.write(Data("simhost: \(error)\n".utf8))
@@ -140,7 +142,12 @@ public final class Host: @unchecked Sendable {
             withGuest { guest in
                 if milliseconds > 0, let from { guest.sweep(from: from, to: degrees, milliseconds: milliseconds) } else { guest.fold(to: degrees) }
             }
-            change { $0.hinge = degrees }
+            // The helper reads the hinge as it moves. Without its reports, the angle set is the best guess.
+            if !hingeReadBack {
+                queue.asyncAfter(deadline: .now() + 0.5) { [self] in
+                    if !hingeReadBack, setAngle == degrees { change { $0.hinge = degrees } }
+                }
+            }
         case .orientation(let value):
             withGuest { $0.orientation(Int(value.rawValue)) }
             change { $0.held = value }
@@ -169,6 +176,11 @@ public final class Host: @unchecked Sendable {
         } else {
             touchscreen.touch(Self.phase(phase), at: point, on: panel, edge: SHEdge(rawValue: UInt32(edge)) ?? .none)
         }
+    }
+
+    private func heardHinge(_ degrees: Double) {
+        hingeReadBack = true
+        change { $0.hinge = degrees }
     }
 
     /// Changes the state, and tells every client when that changed something.

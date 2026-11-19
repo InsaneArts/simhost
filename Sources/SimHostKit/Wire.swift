@@ -20,7 +20,7 @@ public enum Wire {
 
     /// What the host knows about the device. Every client hears it when it changes.
     public struct State: Equatable, Sendable {
-        /// The hinge angle in degrees, as a client last set it. Nil until one does.
+        /// The hinge angle in degrees, as CoreMotion reads it in the simulator. Nil until the helper there starts.
         public var hinge: Double?
         /// How the device is held, as a client last set it.
         public var held: Orientation

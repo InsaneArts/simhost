@@ -6,6 +6,8 @@ let guestSource = #"""
 // a USB keyboard, and on iPhone Duo the hinge and the hardware buttons.
 // The hinge and button services follow serve-sim's Duo HID helper (Apache-2.0).
 //
+// On iPhone Duo it also prints "hinge <degrees>" whenever the hinge moves, and once at the start.
+//
 // It reads one command per line from stdin and answers each with OK or ERROR:
 //   key <usage> <down>          a keyboard key, by HID usage on page 7; down is 1 or 0
 //   type <text>                 types printable ASCII on a US layout
@@ -137,6 +139,33 @@ static BOOL orientation(unsigned value) {
     return vendor(data);
 }
 
+// The hinge as CoreMotion reads it. CMAngleManager is private: found in iOS 27.2, where its handler
+// takes one CMAngle. Without it, the helper does not tell the hinge.
+// The mechanical angle is where the hinge is. CMAngle's angleDegrees is a value derived from it,
+// which can stay a few degrees off after a slow fold: 127.2 for a hinge at 130.
+@interface NSObject (SimHostAngle)
+- (void)startAngleUpdatesToQueue:(NSOperationQueue *)queue handler:(void (^)(id angle))handler;
+- (float)mechanicalAngleDegrees;
+@end
+
+static id angles;
+
+static void watchHinge(void) {
+    dlopen("/System/Library/Frameworks/CoreMotion.framework/CoreMotion", RTLD_NOW);
+    Class manager = NSClassFromString(@"CMAngleManager");
+    if (![manager instancesRespondToSelector:@selector(startAngleUpdatesToQueue:handler:)]) return;
+    angles = [[manager alloc] init];
+    __block float last = NAN;
+    [angles startAngleUpdatesToQueue:[NSOperationQueue new] handler:^(id angle) {
+        if (![angle respondsToSelector:@selector(mechanicalAngleDegrees)]) return;
+        float degrees = [angle mechanicalAngleDegrees];
+        if (degrees == last) return;
+        last = degrees;
+        // One call writes the whole line, so it does not mix with an answer.
+        printf("hinge %.2f\n", degrees); fflush(stdout);
+    }];
+}
+
 int main(void) {
     @autoreleasepool {
         dlopen("/System/Library/PrivateFrameworks/HID.framework/HID", RTLD_NOW);
@@ -157,6 +186,7 @@ int main(void) {
         if (!keyboard) { fprintf(stderr, "the keyboard service did not start\n"); return 1; }
         usleep(300000); // backboardd enumerates new services in this time.
         puts("READY"); fflush(stdout);
+        if (hinge) watchHinge();
 
         char *line = NULL; size_t capacity = 0; ssize_t length;
         while ((length = getline(&line, &capacity, stdin)) > 0) {
