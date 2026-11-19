@@ -6,6 +6,7 @@ let package = Package(
     platforms: [.macOS(.v15)],
     products: [
         .library(name: "SimHostKit", targets: ["SimHostKit"]),
+        .executable(name: "simhost", targets: ["simhost"]),
     ],
     targets: [
         // The private C functions of Xcode's SimulatorKit, behind a small typed interface.
@@ -18,5 +19,6 @@ let package = Package(
                 .enableUpcomingFeature("InferIsolatedConformances"),
             ]
         ),
+        .executableTarget(name: "simhost", dependencies: ["SimHostKit"]),
     ]
 )
