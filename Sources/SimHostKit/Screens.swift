@@ -6,6 +6,8 @@ import IOSurface
 public struct Frame: @unchecked Sendable {
     public let panel: Panel
     public let surface: IOSurfaceRef
+    /// How the interface is turned inside the framebuffer.
+    public let orientation: Orientation
     /// When simhost saw the picture, in nanoseconds of `DispatchTime.now().uptimeNanoseconds`.
     public let time: UInt64
 }
@@ -14,7 +16,8 @@ public struct Frame: @unchecked Sendable {
 ///
 /// SimulatorKit calls back on every frame it composes. A callback can arrive a moment before
 /// the picture is in the surface, so when the surface's seed has not changed yet, simhost looks
-/// again after 1, 1, 2, 4, 8 and 16 ms.
+/// again after 1, 1, 2, 4, 8 and 16 ms. When the interface turns, the panel is reported again
+/// with its new orientation, also when its picture has not changed yet.
 public final class Screens: @unchecked Sendable {
     private let simulator: Simulator
     private let queue: DispatchQueue
@@ -22,6 +25,7 @@ public final class Screens: @unchecked Sendable {
     private var descriptors: [NSObject] = []
     private var callbacks: [ObjectIdentifier: UUID] = [:]
     private var seeds: [Panel: UInt32] = [:]
+    private var orientations: [Panel: Orientation] = [:]
     private var recheck: UInt64 = 0
     private let panels: Set<Panel>
 
@@ -40,7 +44,7 @@ public final class Screens: @unchecked Sendable {
 
     /// The panels that have a live picture now, with their surfaces.
     public func current() -> [Frame] {
-        queue.sync { surfaces().map { Frame(panel: $0.panel, surface: $0.surface, time: DispatchTime.now().uptimeNanoseconds) } }
+        queue.sync { surfaces().map { frame($0.panel, $0.surface, orientation: $0.orientation) } }
     }
 
     public func stop() {
@@ -76,21 +80,47 @@ public final class Screens: @unchecked Sendable {
             let changed: @convention(block) () -> Void = { [weak self] in self?.look(attempt: 0, generation: nil) }
             unsafeBitCast(descriptor, to: FramebufferDescriptor.self).registerScreenCallbacks(
                 uuid: uuid, callbackQueue: queue, frameCallback: changed, surfacesChangedCallback: changed,
-                propertiesChangedCallback: {})
+                propertiesChangedCallback: { [weak self] in self?.turned() })
         }
         look(attempt: 0, generation: nil)
     }
 
     /// The live surface of each panel. A descriptor whose surface is not a native panel, such as
     /// Xcode 27's 7680x4320 presentation surface, is left out.
-    private func surfaces() -> [(panel: Panel, surface: IOSurfaceRef)] {
+    private func surfaces() -> [(panel: Panel, surface: IOSurfaceRef, orientation: Orientation)] {
         descriptors.compactMap { descriptor in
-            guard let object = descriptor.perform(NSSelectorFromString("framebufferSurface"))?.takeUnretainedValue() else { return nil }
-            let surface = unsafeBitCast(object, to: IOSurfaceRef.self)
-            let panel = Panel(width: IOSurfaceGetWidth(surface), height: IOSurfaceGetHeight(surface))
-            guard panel.width > 0, panels.isEmpty || panels.contains(panel) else { return nil }
-            return (panel, surface)
+            guard let (panel, surface) = surface(of: descriptor) else { return nil }
+            if orientations[panel] == nil { orientations[panel] = Self.orientation(of: descriptor) }
+            return (panel, surface, orientations[panel]!)
         }
+    }
+
+    private func surface(of descriptor: NSObject) -> (panel: Panel, surface: IOSurfaceRef)? {
+        guard let object = descriptor.perform(NSSelectorFromString("framebufferSurface"))?.takeUnretainedValue() else { return nil }
+        let surface = unsafeBitCast(object, to: IOSurfaceRef.self)
+        let panel = Panel(width: IOSurfaceGetWidth(surface), height: IOSurfaceGetHeight(surface))
+        guard panel.width > 0, panels.isEmpty || panels.contains(panel) else { return nil }
+        return (panel, surface)
+    }
+
+    /// The interface turned on some panel. SimulatorKit calls this for each panel at once.
+    private func turned() {
+        for descriptor in descriptors {
+            guard let (panel, surface) = surface(of: descriptor) else { continue }
+            let orientation = Self.orientation(of: descriptor)
+            guard orientations[panel] != orientation else { continue }
+            orientations[panel] = orientation
+            onFrame(frame(panel, surface, orientation: orientation))
+        }
+    }
+
+    private func frame(_ panel: Panel, _ surface: IOSurfaceRef, orientation: Orientation) -> Frame {
+        Frame(panel: panel, surface: surface, orientation: orientation, time: DispatchTime.now().uptimeNanoseconds)
+    }
+
+    private static func orientation(of descriptor: NSObject) -> Orientation {
+        guard let properties = unsafeBitCast(descriptor, to: FramebufferDescriptor.self).screenProperties else { return .portrait }
+        return Orientation(rawValue: UInt8(truncatingIfNeeded: unsafeBitCast(properties, to: ScreenProperties.self).uiOrientation)) ?? .portrait
     }
 
     /// Reports each panel whose picture changed. When none did, looks again a moment later.
@@ -99,12 +129,12 @@ public final class Screens: @unchecked Sendable {
         else if generation != recheck { return }
         let now = DispatchTime.now().uptimeNanoseconds
         var reported = false
-        for (panel, surface) in surfaces() {
+        for (panel, surface, orientation) in surfaces() {
             let seed = IOSurfaceGetSeed(surface)
             guard seeds[panel] != seed else { continue }
             seeds[panel] = seed
             reported = true
-            onFrame(Frame(panel: panel, surface: surface, time: now))
+            onFrame(Frame(panel: panel, surface: surface, orientation: orientation, time: now))
         }
         let delays = [1, 1, 2, 4, 8, 16]
         guard !reported, attempt < delays.count else { return }
@@ -122,4 +152,11 @@ public final class Screens: @unchecked Sendable {
                                  frameCallback: @convention(block) @escaping () -> Void,
                                  surfacesChangedCallback: @convention(block) @escaping () -> Void,
                                  propertiesChangedCallback: @convention(block) @escaping () -> Void)
+    var screenProperties: AnyObject? { get }
+}
+
+/// SimulatorKit's properties of one screen.
+@objc protocol ScreenProperties {
+    /// 1 portrait, 2 upside down, 3 landscape left, 4 landscape right. Others have no interface.
+    var uiOrientation: UInt32 { get }
 }

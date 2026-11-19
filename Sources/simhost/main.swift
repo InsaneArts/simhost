@@ -89,6 +89,15 @@ func bench(udid: String, rounds: Int, throughHost: Bool) throws {
     print("frames seen: \(watch.frames)")
 }
 
+/// The last orientation of each panel. Screens calls back on its own queue only.
+final class Turns: @unchecked Sendable {
+    private var last: [Panel: Orientation] = [:]
+    func changed(_ panel: Panel, _ orientation: Orientation) -> Bool {
+        defer { last[panel] = orientation }
+        return last[panel] != orientation
+    }
+}
+
 /// The command line that starts this simulator's host: this program with `serve`.
 func launch(_ udid: String) -> [String] {
     [Bundle.main.executablePath ?? CommandLine.arguments[0], "serve", udid]
@@ -141,7 +150,12 @@ do {
             }
         }
         print("watching as client \(host.id)")
-        withExtendedLifetime(host) { dispatchMain() }
+        // Each panel's interface orientation, printed when it changes.
+        let turns = Turns()
+        let screens = try Screens(simulator: Simulator(udid: udid)) { frame in
+            if turns.changed(frame.panel, frame.orientation) { print("screen: \(frame.panel) interface \(frame.orientation)") }
+        }
+        withExtendedLifetime(screens) { dispatchMain() }
     case "bench":
         try bench(udid: udid, rounds: arguments.dropFirst(2).compactMap { Int($0) }.first ?? 40, throughHost: arguments.contains("--host"))
     default:
