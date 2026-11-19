@@ -8,8 +8,11 @@ let package = Package(
         .library(name: "SimHostKit", targets: ["SimHostKit"]),
     ],
     targets: [
+        // The private C functions of Xcode's SimulatorKit, behind a small typed interface.
+        .target(name: "CSimHost", linkerSettings: [.linkedFramework("Foundation")]),
         .target(
             name: "SimHostKit",
+            dependencies: ["CSimHost"],
             swiftSettings: [
                 .enableUpcomingFeature("NonisolatedNonsendingByDefault"),
                 .enableUpcomingFeature("InferIsolatedConformances"),
