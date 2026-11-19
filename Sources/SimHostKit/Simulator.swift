@@ -60,6 +60,12 @@ public struct Panel: Hashable, Sendable, CustomStringConvertible {
     }
 }
 
+/// How the device is held, or how the interface is turned inside a panel's framebuffer.
+/// The raw values are SimulatorKit's, and the names are the ones `simctl io enumerate` prints.
+public enum Orientation: UInt8, Sendable {
+    case portrait = 1, upsideDown = 2, landscapeLeft = 3, landscapeRight = 4
+}
+
 /// One simulator device, found through CoreSimulator.
 public final class Simulator: @unchecked Sendable {
     public let udid: String

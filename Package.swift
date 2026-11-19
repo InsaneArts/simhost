@@ -20,5 +20,6 @@ let package = Package(
             ]
         ),
         .executableTarget(name: "simhost", dependencies: ["SimHostKit"]),
+        .testTarget(name: "SimHostKitTests", dependencies: ["SimHostKit"]),
     ]
 )
