@@ -50,6 +50,10 @@ public enum Wire {
         case orientation(Orientation)
         /// A hardware button by HID page and usage.
         case button(page: UInt32, usage: UInt32, down: Bool)
+        /// Makes every animation on the simulator slow, or normal again.
+        case slowAnimations(Bool)
+        /// Tells the apps on the simulator that memory is low.
+        case memoryWarning
     }
 
     public enum Message: Equatable, Sendable {
@@ -152,6 +156,10 @@ struct Writer {
             u8(6); u8(value.rawValue)
         case .button(let page, let usage, let down):
             u8(7); u32(page); u32(usage); u8(down ? 1 : 0)
+        case .slowAnimations(let on):
+            u8(8); u8(on ? 1 : 0)
+        case .memoryWarning:
+            u8(9)
         }
     }
 }
@@ -195,6 +203,8 @@ struct Scanner {
         case 5: guard let degrees = f64(), let ms = f64() else { return nil }; return .fold(degrees: degrees, milliseconds: ms)
         case 6: return u8().flatMap(Orientation.init).map(Wire.Input.orientation)
         case 7: guard let page = u32(), let usage = u32(), let down = bool() else { return nil }; return .button(page: page, usage: usage, down: down)
+        case 8: return bool().map(Wire.Input.slowAnimations)
+        case 9: return .memoryWarning
         default: return nil
         }
     }

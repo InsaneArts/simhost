@@ -98,6 +98,17 @@ public final class Simulator: @unchecked Sendable {
 
     public var isDuo: Bool { deviceTypeIdentifier == "com.apple.CoreSimulator.SimDeviceType.iPhone-Duo" }
 
+    /// Makes every animation on the simulator slow, or normal again. False when CoreSimulator refused.
+    @discardableResult
+    public func setSlowAnimations(_ on: Bool) -> Bool {
+        unsafeBitCast(device, to: DeviceDebugging.self).setCADebugOption("debug_slow_animations", enabled: on)
+    }
+
+    /// Tells the apps on the simulator that memory is low.
+    public func simulateMemoryWarning() {
+        unsafeBitCast(device, to: DeviceDebugging.self).simulateMemoryWarning()
+    }
+
     /// The panels with a touchscreen, from the device type's capabilities.
     public var panels: [Panel] {
         guard let type = device.value(forKey: "deviceType") as? NSObject,
@@ -117,4 +128,10 @@ public final class Simulator: @unchecked Sendable {
             return Panel(width: width, height: height)
         }
     }
+}
+
+/// CoreSimulator's SimDevice, as much of it as the debugging inputs call.
+@objc protocol DeviceDebugging {
+    @objc(setCADebugOption:enabled:) func setCADebugOption(_ name: String, enabled: Bool) -> Bool
+    func simulateMemoryWarning()
 }

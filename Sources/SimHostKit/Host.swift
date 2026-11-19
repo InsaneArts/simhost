@@ -159,6 +159,10 @@ public final class Host: @unchecked Sendable {
         case .button(let page, let usage, let down):
             if simulator.isDuo { withGuest { $0.button(page: page, usage: usage, down: down) } }
             else { touchscreen.button(page: page, usage: usage, down: down) }
+        case .slowAnimations(let on):
+            simulator.setSlowAnimations(on)
+        case .memoryWarning:
+            simulator.simulateMemoryWarning()
         }
         let name = clients[id]?.name ?? ""
         let event = Wire.encode(.event(client: id, name: name, time: DispatchTime.now().uptimeNanoseconds, input: input))
