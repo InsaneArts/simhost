@@ -92,6 +92,11 @@ public final class Simulator: @unchecked Sendable {
     public var name: String { device.value(forKey: "name") as? String ?? udid }
     public var isBooted: Bool { (device.value(forKey: "stateString") as? String) == "Booted" }
 
+    /// When the simulator last started. A simulator shows an Apple logo for a minute or two after it.
+    public var bootedAt: Date? {
+        device.responds(to: NSSelectorFromString("lastBootedAt")) ? device.value(forKey: "lastBootedAt") as? Date : nil
+    }
+
     var deviceTypeIdentifier: String? {
         (device.value(forKey: "deviceType") as? NSObject)?.value(forKey: "identifier") as? String
     }
