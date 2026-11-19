@@ -119,7 +119,10 @@ do {
     guard arguments.count >= 2 else { print(usage); exit(2) }
     let udid = arguments[1]
     func client(_ onMessage: @escaping @Sendable (Wire.Message) -> Void = { _ in }) throws -> HostClient {
-        try HostClient(udid: udid, name: "simhost", launch: launch(udid), onMessage: onMessage)
+        try HostClient(udid: udid, name: "simhost", launch: launch(udid), onMessage: onMessage, onClose: {
+            print("the host closed the connection")
+            exit(1)
+        })
     }
     switch arguments[0] {
     case "serve":

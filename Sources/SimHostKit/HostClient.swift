@@ -10,13 +10,17 @@ public final class HostClient: @unchecked Sendable {
     private var reader = Wire.Reader()
     private let lock = NSLock()
     private let onMessage: @Sendable (Wire.Message) -> Void
+    private let onClose: @Sendable () -> Void
 
     /// Connects to the host of `udid`. When none runs and `launch` is given, starts it with that
     /// command line, in a session of its own so that it outlives this process, and waits up to
-    /// five seconds for it. `onMessage` runs on the client's queue for each event and state.
+    /// five seconds for it. `onMessage` runs on the client's queue for each event and state, and
+    /// `onClose` runs there once if the host ends the connection, as when the simulator shuts down.
     public init(udid: String, name: String, launch: [String]? = nil,
-                onMessage: @escaping @Sendable (Wire.Message) -> Void = { _ in }) throws(SimHostError) {
+                onMessage: @escaping @Sendable (Wire.Message) -> Void = { _ in },
+                onClose: @escaping @Sendable () -> Void = {}) throws(SimHostError) {
         self.onMessage = onMessage
+        self.onClose = onClose
         let path = Host.socketPath(udid: udid)
         var fd = Self.connect(path)
         if fd < 0, let launch {
@@ -52,7 +56,11 @@ public final class HostClient: @unchecked Sendable {
             guard let self else { return }
             var buffer = [UInt8](repeating: 0, count: 65536)
             let count = read(self.fd, &buffer, buffer.count)
-            guard count > 0 else { self.source?.cancel(); return }
+            guard count > 0 else {
+                self.source?.cancel()
+                self.onClose()
+                return
+            }
             for message in self.reader.read(Data(buffer[0..<count])) { self.onMessage(message) }
         }
         source.setCancelHandler { [fd] in Darwin.close(fd) }
