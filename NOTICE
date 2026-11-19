@@ -1,0 +1,11 @@
+simhost contains code derived from serve-sim (https://github.com/EvanBacon/serve-sim),
+Copyright Evan Bacon, licensed under the Apache License, Version 2.0:
+
+- Sources/SimHostKit/GuestSource.swift: the hinge, orientation and button services follow
+  serve-sim's Duo HID helper (Sources/SimDuoHID/main.m).
+- Sources/SimHostKit/Screens.swift and Sources/CSimHost/HIDClient.m: the framebuffer callbacks,
+  the seed recheck and the Indigo message calls follow serve-sim's FrameCapture.swift and
+  HIDInjector.swift.
+
+The changes: the keyboard service, the host and its protocol, and the rewrite in Swift and
+Objective-C around them.
