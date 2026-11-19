@@ -1,7 +1,8 @@
 import CryptoKit
 import Foundation
 
-/// simhost's helper inside the simulator: a virtual keyboard.
+/// simhost's helper inside the simulator: a virtual keyboard, and on iPhone Duo the hinge,
+/// the held orientation and the hardware buttons.
 ///
 /// The helper is built from source with the installed Xcode on first use and kept in
 /// ~/Library/Caches/simhost, so it always matches the simulator SDK.
@@ -18,6 +19,9 @@ public final class Guest: @unchecked Sendable {
         let helper = try Self.build()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/xcrun")
         process.arguments = ["simctl", "spawn", simulator.udid, helper.path]
+        var environment = ProcessInfo.processInfo.environment
+        if simulator.isDuo { environment["SIMCTL_CHILD_SIMHOST_DUO"] = "1" }
+        process.environment = environment
         process.standardInput = input
         process.standardOutput = output
         process.standardError = FileHandle.nullDevice
@@ -59,6 +63,26 @@ public final class Guest: @unchecked Sendable {
         guard !commands.isEmpty else { done?(true); return }
         let all = Answers(count: commands.count, done: done)
         for command in commands { send(command) { all.add($0) } }
+    }
+
+    /// Sets iPhone Duo's hinge, from 0 (closed) to 180 (open flat).
+    public func fold(to degrees: Double, done: ((Bool) -> Void)? = nil) {
+        send("angle \(degrees)", done: done)
+    }
+
+    /// Moves iPhone Duo's hinge over `milliseconds`, one step per frame.
+    public func sweep(from: Double, to: Double, milliseconds: Double, done: ((Bool) -> Void)? = nil) {
+        send("sweep \(from) \(to) \(milliseconds)", done: done)
+    }
+
+    /// iPhone Duo's held orientation: 1 portrait, 2 upside down, 3 landscape left, 4 landscape right.
+    public func orientation(_ value: Int, done: ((Bool) -> Void)? = nil) {
+        send("orientation \(value)", done: done)
+    }
+
+    /// An iPhone Duo hardware button by HID page and usage.
+    public func button(page: UInt32, usage: UInt32, down: Bool, done: ((Bool) -> Void)? = nil) {
+        send("button \(page) \(usage) \(down ? 1 : 0)", done: done)
     }
 
     /// Sends a command and waits for its answer. For tests and the command line.
