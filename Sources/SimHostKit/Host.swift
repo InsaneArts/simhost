@@ -154,7 +154,8 @@ public final class Host: @unchecked Sendable {
                 }
             }
         case .orientation(let value):
-            withGuest { $0.orientation(Int(value.rawValue)) }
+            if simulator.isDuo { withGuest { $0.orientation(Int(value.rawValue)) } }
+            else { simulator.rotate(to: value) }
             change { $0.held = value }
         case .button(let page, let usage, let down):
             if simulator.isDuo { withGuest { $0.button(page: page, usage: usage, down: down) } }

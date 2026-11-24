@@ -6,6 +6,8 @@ Copyright Evan Bacon, licensed under the Apache License, Version 2.0:
 - Sources/SimHostKit/Screens.swift and Sources/CSimHost/HIDClient.m: the framebuffer callbacks,
   the seed recheck and the Indigo message calls follow serve-sim's FrameCapture.swift and
   HIDInjector.swift.
+- Sources/SimHostKit/Rotation.swift: the orientation event to the PurpleWorkspacePort follows
+  serve-sim's HIDInjector.swift, which follows idb's FBSimulatorPurpleHID.
 
 The changes: the keyboard service, the host and its protocol, and the rewrite in Swift and
 Objective-C around them.
