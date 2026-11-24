@@ -25,7 +25,7 @@ Measured on one Mac with Xcode 27.2 and an iOS 27.2 iPhone Duo simulator. [Bench
 
 - A Mac with Xcode 27, and an iOS 27 simulator runtime
 
-simhost was tested on a Mac with Apple silicon, with Xcode 27.2 and iPhone Duo simulators on iOS 27.2 only. It uses private interfaces of Xcode, so an Xcode update can break it.
+simhost was tested on a Mac with Apple silicon, with Xcode 27.2 and iOS 27.2 simulators of iPhone Duo and iPhone 18 Pro only. It uses private interfaces of Xcode, so an Xcode update can break it.
 
 ## Build
 
@@ -46,6 +46,8 @@ simhost tap <udid> 0.5 0.5 [cover|inner]   # x and y from 0 to 1, from the top l
 simhost type <udid> "Hello, world"         # into the field that has focus
 simhost key <udid> 40                      # a key by HID usage, 40 is return
 simhost fold <udid> 130 [300]              # iPhone Duo's hinge, over 300 ms
+simhost rotate <udid> 3                    # hold it portrait (1), upside down (2), landscape left (3) or right (4)
+simhost press <udid> 12 233                # a hardware button by HID page and usage: volume up
 simhost watch <udid>                       # print what every client does, and the device's state
 simhost bench <udid> [rounds] [--host]     # time a touch to the frame that shows it
 simhost serve <udid>                       # run the host
@@ -121,7 +123,7 @@ npx --yes serve-sim@0.1.49 --detach <udid> --port 3150
 - It types printable ASCII on a US layout only. It has no key for any other character.
 - The screens are for programs on the same Mac. simhost does not stream them over a network yet.
 - The lit panel comes from a line that SpringBoard logs. An iOS update can change that line.
-- Only iPhone Duo simulators were tested. Other devices use the same code with one panel, untested.
+- Only iPhone Duo and iPhone 18 Pro simulators were tested. Other iPhones use the same code. iPad, Apple Watch and Apple TV were not tested.
 - Two clients that touch at the same moment were not tested.
 
 ## Credits

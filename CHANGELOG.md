@@ -11,6 +11,7 @@ Each release of simhost, newest first. Changes that are not in a release yet are
 - Touches with one and two fingers, edge swipes, and hardware buttons, straight to SimulatorKit.
 - Typing in any app, through a virtual USB keyboard inside the simulator.
 - Slow animations and the memory warning.
+- Turning a device that has no hinge, with the event Simulator.app sends.
 
 **iPhone Duo**
 - Set the hinge, and read it back to the degree.
@@ -18,4 +19,4 @@ Each release of simhost, newest first. Changes that are not in a release yet are
 
 **The host**
 - One process owns a simulator's input. Each client hears every other client's input as it happens.
-- The `simhost` command: `tap`, `type`, `key`, `fold`, `watch`, `bench` and `serve`.
+- The `simhost` command: `tap`, `type`, `key`, `fold`, `rotate`, `press`, `watch`, `bench` and `serve`.
