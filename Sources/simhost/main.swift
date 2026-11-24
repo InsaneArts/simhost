@@ -109,6 +109,8 @@ usage: simhost serve <udid>                   run the host for a simulator
        simhost type <udid> <text>             type text
        simhost key <udid> <usage>             press a key by HID usage, such as 40 for return
        simhost fold <udid> <degrees> [ms]     set iPhone Duo's hinge
+       simhost rotate <udid> <1|2|3|4>        hold the device portrait, upside down, landscape left or right
+       simhost press <udid> <page> <usage>    press a hardware button by HID page and usage
        simhost watch <udid>                   print what every client does
        simhost bench <udid> [rounds] [--host] time a touch to the frame that shows it
 """
@@ -144,6 +146,15 @@ do {
         host.send(.key(usage: usage, down: false))
     case "fold" where arguments.count >= 3:
         try client().send(.fold(degrees: Double(arguments[2]) ?? 0, milliseconds: arguments.count > 3 ? Double(arguments[3]) ?? 0 : 0))
+    case "rotate" where arguments.count >= 3:
+        guard let held = UInt8(arguments[2]).flatMap(Orientation.init) else { print(usage); exit(2) }
+        try client().send(.orientation(held))
+    case "press" where arguments.count >= 4:
+        let host = try client()
+        let page = UInt32(arguments[2]) ?? 12, button = UInt32(arguments[3]) ?? 233
+        host.send(.button(page: page, usage: button, down: true))
+        usleep(100_000)
+        host.send(.button(page: page, usage: button, down: false))
     case "watch":
         let host = try client { message in
             if case .event(let client, let name, let time, let input) = message {
